@@ -15,7 +15,10 @@ void sigchld_han(int signum)
   printf("child process terminated\n");
 }
 
-
+void handle_cgi(FILE *network, char *method, char *path)
+{
+ 
+}
 
 
 
@@ -25,9 +28,9 @@ void handle_request(int nfd)
    char *line = NULL;
    size_t size =0;
    ssize_t num;
- 
-
-   
+   char method[10];
+   char path[100];
+   char protocol[10];
 
    if (network == NULL)
    {
@@ -36,6 +39,7 @@ void handle_request(int nfd)
       return;
    }
    num = getline(&line, &size, network);
+   
    if (num == -1)
    {
       perror("getline");
@@ -43,25 +47,58 @@ void handle_request(int nfd)
       fclose(network);
       return;
    }
-   char method[10];
-   char path[100];
-   char protocol[10];
-   sscanf(line, "%s %s %s", method, path, protocol);
-    
 
+   if (sscanf(line,"%s %s %s", method, path, protocol) != 3){
+      fprintf(network, "HTTP/1.0 400 Bad Request\r\n");
+      fprintf(network, "Content-Type: text/html\r\n");
+      fprintf(network, "\r\n");
+      fprintf(network,"<html><body><h1>400 Bad Request</h1></body></html>\r\n");
+    
+      fflush(network);
+      free(line);
+      fclose(network);
+      return;
+   }
+    
 
 
    while ((num = getline(&line, &size, network)) >0){
       if (strcmp(line, "\r\n") == 0|| strcmp(line, "\n") == 0)
         break;
     }
+    if (strcmp(method, "GET") != 0 && strcmp(method, "HEAD") != 0){
+         fprintf(network, "HTTP/1.0 501 Not Implemented\r\n");
+         fprintf(network, "Content-Type: text/html\r\n");
+         fprintf(network, "\r\n");
+         fprintf(network,"<html><body><h1>501 Not Implemented</h1></body></html>\r\n");
+         
+         fflush(network);
+         free(line);
+         fclose(network);
+         return;
+    }
       char *filepath = path+1;
       FILE *file = fopen(filepath, "r");
      
       
       if (file == NULL){
-
-        fprintf(network, "HTTP/1.0 404 Not Found\r\n\r\n");
+         if (access(filepath,F_OK) == 0){
+            fprintf(network, "HTTP/1.0 403 Permission Denied\r\n");
+            fprintf(network, "Content-Type: text/html\r\n");
+            fprintf(network, "\r\n");
+            fprintf(network,"<html><body><h1>403 Permission Denied</h1></body></html>\r\n");
+            
+         }
+         else{
+            fprintf(network, "HTTP/1.0 404 Not Found\r\n");
+            fprintf(network, "Content-Type: text/html\r\n");
+            fprintf(network, "\r\n");
+            fprintf(network,"<html><body><h1>404 Not Found</h1></body></html>\r\n");
+            
+         }
+      
+      
+      
       }else{
         struct stat st;
         stat(filepath, &st);
@@ -75,20 +112,16 @@ void handle_request(int nfd)
             char buffer[1024];
             while(fgets(buffer, sizeof(buffer), file) != NULL){
              fprintf(network, "%s", buffer);
-        }
-      }
+            }
+         }
         fclose(file);
-
-   
+   }
    fflush(network);
    free(line);
    fclose(network);
-}
-
-void build_response(){
-
 
 }
+
 
 void run_service(int fd)
 {
